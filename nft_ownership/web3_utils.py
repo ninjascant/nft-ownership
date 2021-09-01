@@ -14,6 +14,6 @@ def topic_to_address(w3, topic):
 
 
 def get_owner_on_chain(w3, user_metadata):
-    nft_contract = get_contract_instance(w3, user_metadata['nft_address'], nft_abi)
+    nft_contract = get_contract_instance(w3, user_metadata['nft_contract'], nft_abi)
     owner = nft_contract.functions.ownerOf(user_metadata['token_id'].call())
     return owner

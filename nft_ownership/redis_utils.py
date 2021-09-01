@@ -22,7 +22,8 @@ def set_last_block(logs, connector):
 
 
 def get_owner_redis(connector, user_metadata):
-    nft_key = user_metadata['nft_address'] + '_' + int(user_metadata['token_id'])
+    nft_key = user_metadata['nft_contract'] + '_' + str(user_metadata['token_id'])
     stored_owner = connector.conn.get(nft_key)
-
+    if stored_owner is not None:
+        stored_owner = stored_owner.decode()
     return stored_owner
