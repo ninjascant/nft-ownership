@@ -1,0 +1,4 @@
+click==8.0.1
+web3==5.23.1
+redis==3.5.3
+discord_webhook==0.14.0
