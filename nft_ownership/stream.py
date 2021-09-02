@@ -11,9 +11,11 @@ from .web3_utils import topic_to_address, get_contract_instance
 with open('data/nft_abi.json') as json_file:
     nft_abi = json.load(json_file)
 
+with open('config.json') as json_file:
+    config = json.load(json_file)
 
 NFT_TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
-WEBHOOK_URL = "https://discord.com/api/webhooks/882722259960205342/-wrzzhPVgELeW4m5Ql7wPBcHs4Kw6OTayJ1RvHi7jxMC9uqoELEPrOXo8X_A5hWhfn_K"
+WEBHOOK_URL = config['discord_webhook_url']
 
 
 def construct_nft_id(log):
@@ -35,7 +37,6 @@ def parse_nft_transfer(w3, transfer):
         'log_index': transfer['logIndex'],
         'from_address': topic_to_address(w3, transfer['topics'][1]),
         'to_address': topic_to_address(w3, transfer['topics'][2]),
-        # 'token_id': w3.toInt(transfer['topics'][3])
     }
     return parsed_event
 
@@ -94,10 +95,9 @@ def parse_and_update(new_logs, connector, w3):
     parsed_logs = [parse_nft_transfer(w3, log) for log in new_logs]
 
     if len(parsed_logs) != 0:
-        # update_ownership(parsed_logs, connector)
         check_balances(w3, connector, parsed_logs)
-        # last_block = set_last_block(parsed_logs, connector)
-        # print(f'Found {len(parsed_logs)} NFT transfers. Last synced block: {last_block}')
+        last_block = set_last_block(parsed_logs, connector)
+        print(f'Found {len(parsed_logs)} transfers. Last synced block: {last_block}')
 
 
 @click.command()
@@ -109,7 +109,6 @@ def stream_updates(node_url, redis_url, last_block, sleep_interval):
     connector = StorageClient(redis_url)
 
     w3 = Web3(HTTPProvider(node_url))
-    # nft_contract = get_contract_instance(w3, )
 
     if last_block is None:
         last_block = get_last_block(connector, w3)
