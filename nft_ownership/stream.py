@@ -42,7 +42,7 @@ def parse_nft_transfer(w3, transfer):
 
 
 def filter_nft_transfers(logs):
-    return [log for log in logs if len(log['topics']) == 4]
+    return [log for log in logs if len(log['topics']) > 2]
 
 
 def get_balance(contract, address):
@@ -91,8 +91,8 @@ def check_balances(w3, connector, transfers):
 
 
 def parse_and_update(new_logs, connector, w3):
-    # filtered_logs = filter_nft_transfers(new_logs)
-    parsed_logs = [parse_nft_transfer(w3, log) for log in new_logs]
+    filtered_logs = filter_nft_transfers(new_logs)
+    parsed_logs = [parse_nft_transfer(w3, log) for log in filtered_logs]
 
     if len(parsed_logs) != 0:
         check_balances(w3, connector, parsed_logs)
