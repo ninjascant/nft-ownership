@@ -82,12 +82,13 @@ def check_balances(w3, connector, transfers):
                     user['isQualified'] = False
                     kicked_users.append(user['address'])
 
-        connector.write('discord', discord_data)
+        if len(kicked_users) > 0:
+            connector.write('discord', discord_data)
 
-        send_message(
-            f".allow_user_from_record {token} {kicked_users[0]} ",
-            WEBHOOK_URL
-        )
+            send_message(
+                f".allow_user_from_record {token} {kicked_users[0]} ",
+                WEBHOOK_URL
+            )
 
 
 def parse_and_update(new_logs, connector, w3):
