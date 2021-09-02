@@ -1,11 +1,19 @@
 import time
 import click
+import json
+import itertools
 from web3 import Web3, HTTPProvider
+from discord_webhook import DiscordWebhook
 
 from .redis_utils import StorageClient, get_last_block, set_last_block
-from .web3_utils import topic_to_address
+from .web3_utils import topic_to_address, get_contract_instance
+
+with open('data/nft_abi.json') as json_file:
+    nft_abi = json.load(json_file)
+
 
 NFT_TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
+WEBHOOK_URL = "https://discord.com/api/webhooks/882722259960205342/-wrzzhPVgELeW4m5Ql7wPBcHs4Kw6OTayJ1RvHi7jxMC9uqoELEPrOXo8X_A5hWhfn_K"
 
 
 def construct_nft_id(log):
@@ -27,7 +35,7 @@ def parse_nft_transfer(w3, transfer):
         'log_index': transfer['logIndex'],
         'from_address': topic_to_address(w3, transfer['topics'][1]),
         'to_address': topic_to_address(w3, transfer['topics'][2]),
-        'token_id': w3.toInt(transfer['topics'][3])
+        # 'token_id': w3.toInt(transfer['topics'][3])
     }
     return parsed_event
 
@@ -36,14 +44,60 @@ def filter_nft_transfers(logs):
     return [log for log in logs if len(log['topics']) == 4]
 
 
+def get_balance(contract, address):
+    return int(contract.functions.balanceOf(address).call())
+
+
+def send_message(message_text, webhook):
+    webhook = DiscordWebhook(url=webhook, content=message_text)
+    response = webhook.execute()
+    return response
+
+
+def check_balances(w3, connector, transfers):
+    transfers = sorted(transfers, key=lambda x: x['contract_address'])
+    senders = {log['from_address'] for log in transfers}
+    transfers_by_token = itertools.groupby(transfers, key=lambda x: x['contract_address'])
+
+    discord_data = connector.read('discord')
+
+    for token, transfers in transfers_by_token:
+        token_contract = get_contract_instance(w3, token, nft_abi)
+        token_channel = discord_data.get(token)
+        if not token_channel:
+            continue
+        token_users = token_channel['users'].values()
+
+        kicked_users = []
+
+        for user in token_users:
+            if user['address'] in senders:
+                user['owns'] = get_balance(token_contract, w3.toChecksumAddress(user['address']))
+
+                should_kick = user['owns'] < token_channel['minBalance']
+
+                if should_kick:
+                    print(f'User {user["address"]} should be kicked')
+                    user['isQualified'] = False
+                    kicked_users.append(user['address'])
+
+        connector.write('discord', discord_data)
+
+        send_message(
+            f".allow_user_from_record {token} {kicked_users[0]} ",
+            WEBHOOK_URL
+        )
+
+
 def parse_and_update(new_logs, connector, w3):
-    filtered_logs = filter_nft_transfers(new_logs)
-    parsed_logs = [parse_nft_transfer(w3, log) for log in filtered_logs]
+    # filtered_logs = filter_nft_transfers(new_logs)
+    parsed_logs = [parse_nft_transfer(w3, log) for log in new_logs]
 
     if len(parsed_logs) != 0:
-        update_ownership(parsed_logs, connector)
-        last_block = set_last_block(parsed_logs, connector)
-        print(f'Found {len(parsed_logs)} NFT transfers. Last synced block: {last_block}')
+        # update_ownership(parsed_logs, connector)
+        check_balances(w3, connector, parsed_logs)
+        # last_block = set_last_block(parsed_logs, connector)
+        # print(f'Found {len(parsed_logs)} NFT transfers. Last synced block: {last_block}')
 
 
 @click.command()
@@ -55,6 +109,7 @@ def stream_updates(node_url, redis_url, last_block, sleep_interval):
     connector = StorageClient(redis_url)
 
     w3 = Web3(HTTPProvider(node_url))
+    # nft_contract = get_contract_instance(w3, )
 
     if last_block is None:
         last_block = get_last_block(connector, w3)
